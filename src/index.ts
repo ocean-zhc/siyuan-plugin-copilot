@@ -53,6 +53,7 @@ export default class PluginSample extends Plugin {
     private chatDialogs: Map<string, { dialog: Dialog; app: ChatDialog }> = new Map();
     private webApps: Map<string, any> = new Map(); // 存储待打开的小程序数据
     private webViewHistory: WebViewHistory[] = []; // WebView 历史记录
+    private openMenuDoctreeBindThis = this.openMenuDoctree.bind(this);
     private domainIconMap: Map<string, string> = new Map(); // 缓存域名与图标文件名的映射
 
     /**
@@ -411,6 +412,9 @@ export default class PluginSample extends Plugin {
         // 设置i18n插件实例
         setPluginInstance(this);
 
+        // 注册文档树右键菜单
+        this.eventBus.on("open-menu-doctree", this.openMenuDoctreeBindThis);
+
 
 
         // 加载历史记录
@@ -451,7 +455,8 @@ export default class PluginSample extends Plugin {
                 new AISidebar({
                     target: element,
                     props: {
-                        plugin: pluginInstance
+                        plugin: pluginInstance,
+                        respondToGlobalActions: true
                     }
                 });
             },
@@ -1826,7 +1831,31 @@ export default class PluginSample extends Plugin {
 
     onunload() {
         //当插件被禁用的时候，会自动调用这个函数
+        this.eventBus.off("open-menu-doctree", this.openMenuDoctreeBindThis);
         console.log("Copilot onunload");
+    }
+
+    private openMenuDoctree({ detail }: any) {
+        const menu = detail.menu;
+        const elements: NodeListOf<HTMLElement> = detail.elements;
+        const type: string = detail.type;
+        // 仅对文档类型显示
+        if (type !== 'doc' || !elements || elements.length === 0) return;
+        const docId = elements[0]?.getAttribute("data-node-id");
+        if (!docId) return;
+
+        menu.addItem({
+            icon: "iconCopilot",
+            label: t('menu.summarizeDoc'),
+            click: () => {
+                this.openAITab();
+                setTimeout(() => {
+                    window.dispatchEvent(new CustomEvent('copilot-summarize-doc', {
+                        detail: { docId }
+                    }));
+                }, 300);
+            }
+        });
     }
 
     async uninstall() {
